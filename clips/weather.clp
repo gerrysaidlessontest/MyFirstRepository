@@ -1,41 +1,100 @@
+; -------------------------------
+; Templates
+; -------------------------------
+
 (deftemplate sky
-   (slot color))
+  (slot color))
 
 (deftemplate weather
-   (slot condition))
+  (slot condition))
 
-; Rule: If sky is grey, remove old sky and weather facts, set grey sky and ugly weather
-(defrule update-sky-to-grey
-   ?s <- (sky (color ?))
-   ?w <- (weather (condition ?))
-   (test (neq ?s (sky (color grey))))
-   =>
-   (retract ?s)
-   (retract ?w)
-   (assert (sky (color grey)))
-   (assert (weather (condition ugly))))
+(deftemplate set-sky
+  (slot to-color))
 
-; Rule: If sky is blue, remove old sky and weather facts, set blue sky and nice weather
-(defrule update-sky-to-blue
-   ?s <- (sky (color ?))
-   ?w <- (weather (condition ?))
-   (test (neq ?s (sky (color blue))))
-   =>
-   (retract ?s)
-   (retract ?w)
-   (assert (sky (color blue)))
-   (assert (weather (condition nice))))
+(deftemplate prompt-next
+  (slot value))
 
-; If no sky exists, and blue is asserted, create nice weather
-(defrule init-blue-sky
-   (not (sky))
-   (sky (color blue))
-   =>
-   (assert (weather (condition nice))))
+(deftemplate exit-flag)
 
-; If no sky exists, and grey is asserted, create ugly weather
-(defrule init-grey-sky
-   (not (sky))
-   (sky (color grey))
-   =>
-   (assert (weather (condition ugly))))
+; -------------------------------
+; Ask user for sky color
+; -------------------------------
+
+(defrule ask-user
+  ?prompt <- (prompt-next (value ready))
+  =>
+  (retract ?prompt)
+  (printout t crlf "What is the sky color? (blue or grey, or type exit): ")
+  (bind ?c (read))
+  (if (eq ?c exit) then
+    (assert (exit-flag))
+    (printout t "Exiting." crlf)
+  else
+    (assert (set-sky (to-color ?c)))))
+
+; -------------------------------
+; Set or update sky fact
+; -------------------------------
+
+(defrule init-sky
+  ?cmd <- (set-sky (to-color ?newColor))
+  (not (sky))
+  =>
+  (retract ?cmd)
+  (assert (sky (color ?newColor))))
+
+(defrule update-sky
+  ?cmd <- (set-sky (to-color ?newColor))
+  ?old <- (sky (color ?oldColor&:(neq ?oldColor ?newColor)))
+  =>
+  (retract ?old)
+  (retract ?cmd)
+  (assert (sky (color ?newColor))))
+
+(defrule discard-duplicate-sky-command
+  ?cmd <- (set-sky (to-color ?newColor))
+  (sky (color ?newColor)) ; already correct, no update needed
+  =>
+  (retract ?cmd))
+
+; -------------------------------
+; Weather updates
+; -------------------------------
+
+(defrule weather-nice
+  (sky (color blue))
+  ?w <- (weather (condition ?c&:(neq ?c nice)))
+  =>
+  (retract ?w)
+  (assert (weather (condition nice))))
+
+(defrule weather-ugly
+  (sky (color grey))
+  ?w <- (weather (condition ?c&:(neq ?c ugly)))
+  =>
+  (retract ?w)
+  (assert (weather (condition ugly))))
+
+(defrule init-weather-nice
+  (sky (color blue))
+  (not (weather))
+  =>
+  (assert (weather (condition nice))))
+
+(defrule init-weather-ugly
+  (sky (color grey))
+  (not (weather))
+  =>
+  (assert (weather (condition ugly))))
+
+; -------------------------------
+; Loop to ask again unless exiting
+; -------------------------------
+
+(defrule repeat-loop
+  (sky)
+  (weather)
+  (not (exit-flag))
+  (not (prompt-next))
+  =>
+  (assert (prompt-next (value ready))))

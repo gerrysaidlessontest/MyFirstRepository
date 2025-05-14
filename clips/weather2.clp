@@ -5,6 +5,7 @@
 ; modify this clips application so that apart from the weather
 ; you explain that the sun is out if the sky is blue, and there 
 ; is no sun if the sky is grey.
+; Just FYI my email address is gerrysaid@gmail.com
 
 (deftemplate sky
   (slot color))
